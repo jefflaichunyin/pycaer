@@ -1,4 +1,5 @@
 #include <pybind11/pybind11.h>
+#include <pybind11/numpy.h>
 #include <libcaer/libcaer.h>
 #include <libcaer/devices/davis.h>
 
@@ -16,12 +17,6 @@ int start() {
         perror("Cannot open device");
         return (EXIT_FAILURE);
     }
-
-	struct caer_davis_info davis_info = caerDavisInfoGet(davis_handle);
-
-	printf("%s --- ID: %d, Master: %d, DVS X: %d, DVS Y: %d, Logic: %d.\n", davis_info.deviceString,
-		davis_info.deviceID, davis_info.deviceIsMaster, davis_info.dvsSizeX, davis_info.dvsSizeY,
-		davis_info.logicVersion);
 
     caerDeviceSendDefaultConfig(davis_handle);
     caerDeviceDataStart(davis_handle, NULL, NULL, NULL, NULL, NULL);
@@ -66,7 +61,10 @@ int get_packet() {
     if (packetContainer == NULL) {
         return 0;
     }
-
+    int32_t packetNum = caerEventPacketContainerGetEventPacketsNumber(packetContainer);
+    if (packetNum < 1) {
+        return 0;
+    }
     // only get polarity event and ignore other events
     caerEventPacketHeader packetHeader = caerEventPacketContainerGetEventPacket(packetContainer, POLARITY_EVENT);
     event_cnt = caerEventPacketHeaderGetEventNumber(packetHeader);
