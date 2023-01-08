@@ -1,10 +1,8 @@
 from pycaer import davis
 
-def on_packet():
-    print("get new packet")
-    
 davis.open()
-davis.read()
+e=davis.read()
+print(e)
 davis.close()
 
 # def test_version():

@@ -1,5 +1,6 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
+#include <pybind11/functional.h>
 #include <libcaer/libcaer.h>
 #include <libcaer/devices/davis.h>
 
@@ -7,9 +8,10 @@
 #define STRINGIFY(x) #x
 #define MACRO_STRINGIFY(x) STRINGIFY(x)
 
-caerDeviceHandle davis_handle;
 
-int get_packet();
+namespace py = pybind11;
+
+caerDeviceHandle davis_handle;
 
 int start() {
     davis_handle = caerDeviceOpen(1, CAER_DEVICE_DAVIS, 0, 0, NULL);
@@ -49,42 +51,65 @@ int get_info() {
     return EXIT_SUCCESS;
 }
 
-int get_packet() {
+py::array_t<uint64_t> get_packet() {
     int event_cnt = 0;
+    auto empty = py::array(py::buffer_info(
+        NULL,
+        sizeof(uint64_t),
+        py::format_descriptor<uint64_t>::value,
+        2,
+        {0, 0},
+        {sizeof(uint64_t)*4, sizeof(uint64_t)}
+    ));
+
     if(davis_handle == NULL) {
         perror("Device not yet opened, open it now");
         if(start() == EXIT_FAILURE)
-            return 0;
+            return empty;
     }
 
     caerEventPacketContainer packetContainer = caerDeviceDataGet(davis_handle);
     if (packetContainer == NULL) {
-        return 0;
+        return empty;
     }
     int32_t packetNum = caerEventPacketContainerGetEventPacketsNumber(packetContainer);
-    if (packetNum < 1) {
-        return 0;
+    if (packetNum < 2) {
+        caerEventPacketContainerFree(packetContainer);
+        return empty;
     }
     // only get polarity event and ignore other events
     caerEventPacketHeader packetHeader = caerEventPacketContainerGetEventPacket(packetContainer, POLARITY_EVENT);
+    if (packetHeader == NULL) {
+        perror("packet header is NULL");
+        return empty;
+    }
     event_cnt = caerEventPacketHeaderGetEventNumber(packetHeader);
     caerPolarityEventPacket polarity = (caerPolarityEventPacket) packetHeader;
-    // Get full timestamp and addresses of first event.
-    caerPolarityEventConst firstEvent = caerPolarityEventPacketGetEventConst(polarity, 0);
 
-    int32_t ts = caerPolarityEventGetTimestamp(firstEvent);
-    uint16_t x = caerPolarityEventGetX(firstEvent);
-    uint16_t y = caerPolarityEventGetY(firstEvent);
-    bool pol   = caerPolarityEventGetPolarity(firstEvent);
-
-    printf("First polarity event - ts: %d, x: %d, y: %d, pol: %d.\n", ts, x, y, pol);
-
+    auto events = py::array(py::buffer_info(
+        nullptr,
+        sizeof(uint64_t),
+        py::format_descriptor<uint64_t>::value,
+        2,
+        {event_cnt, 4},
+        {sizeof(uint64_t)*4, sizeof(uint64_t)}
+    ));
+    py::buffer_info buf_inf = events.request(true);
+    auto events_buf = (uint64_t *)buf_inf.ptr;
+    for(int i = 0; i<event_cnt; i++) {
+        caerPolarityEventConst event = caerPolarityEventPacketGetEventConst(polarity, i);
+        int32_t ts = caerPolarityEventGetTimestamp(event);
+        uint16_t x = caerPolarityEventGetX(event);
+        uint16_t y = caerPolarityEventGetY(event);
+        bool pol   = caerPolarityEventGetPolarity(event);
+        events_buf[4*i + 0] = x;
+        events_buf[4*i + 1] = y;
+        events_buf[4*i + 2] = ts;
+        events_buf[4*i + 3] = pol;
+    }
     caerEventPacketContainerFree(packetContainer);
-
-    return event_cnt;
+    return events;
 }
-
-namespace py = pybind11;
 
 PYBIND11_MODULE(davis, m) {
     m.doc() = R"pbdoc(
@@ -108,14 +133,14 @@ PYBIND11_MODULE(davis, m) {
         Close the connection to Davis camera
     )pbdoc");
 
-    m.def("read", &get_packet, R"pbdoc(
-        Read a packet from Davis camera
-    )pbdoc");
+
 
     m.def("info", &get_info, R"pbdoc(
         Read a info from Davis camera
     )pbdoc");
 
+    m.def("read", &get_packet);
+    
 #ifdef VERSION_INFO
     m.attr("__version__") = MACRO_STRINGIFY(VERSION_INFO);
 #else
