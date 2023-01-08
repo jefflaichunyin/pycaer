@@ -10,7 +10,7 @@ scikit_build_example
 
 
 
-An example project built with [pybind11](https://github.com/pybind/pybind11)
+A Python wrapper of libcaer built with [pybind11](https://github.com/pybind/pybind11)
 and scikit-build-core. Python 3.7+ (see older commits for older versions of
 Python).
 
@@ -29,7 +29,7 @@ Installation
 ------------
 
 - clone this repository
-- `pip install ./scikit_build_example`
+- `pip install ./pycaer`
 
 
 CI Examples
@@ -50,9 +50,8 @@ Test call
 ---------
 
 ```python
-import scikit_build_example
-
-scikit_build_example.add(1, 2)
+from pycaer import davis
+davis.read()
 ```
 
 [`cibuildwheel`]:          https://cibuildwheel.readthedocs.io
