@@ -21,6 +21,25 @@ int start() {
     }
 
     caerDeviceSendDefaultConfig(davis_handle);
+    
+	struct caer_bias_coarsefine coarseFineBias;
+
+	coarseFineBias.coarseValue        = 2;
+	coarseFineBias.fineValue          = 116;
+	coarseFineBias.enabled            = true;
+	coarseFineBias.sexN               = false;
+	coarseFineBias.typeNormal         = true;
+	coarseFineBias.currentLevelNormal = true;
+	caerDeviceConfigSet(davis_handle, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_PRBP, caerBiasCoarseFineGenerate(coarseFineBias));
+
+	coarseFineBias.coarseValue        = 1;
+	coarseFineBias.fineValue          = 33;
+	coarseFineBias.enabled            = true;
+	coarseFineBias.sexN               = false;
+	coarseFineBias.typeNormal         = true;
+	coarseFineBias.currentLevelNormal = true;
+	caerDeviceConfigSet(davis_handle, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_PRSFBP, caerBiasCoarseFineGenerate(coarseFineBias));
+	
     caerDeviceDataStart(davis_handle, NULL, NULL, NULL, NULL, NULL);
     caerDeviceConfigSet(davis_handle, CAER_HOST_CONFIG_DATAEXCHANGE, CAER_HOST_CONFIG_DATAEXCHANGE_BLOCKING, true);
 
