@@ -1,8 +1,11 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 #include <pybind11/functional.h>
-#include <libcaer/libcaer.h>
-#include <libcaer/devices/davis.h>
+
+#include <libcaercpp/devices/davis.hpp>
+#include <libcaercpp/filters/dvs_noise.hpp>
+#include <opencv2/core.hpp>
+#include <opencv2/highgui/highgui.hpp>
 
 #include <stdio.h>
 #define STRINGIFY(x) #x
@@ -11,66 +14,75 @@
 
 namespace py = pybind11;
 
-caerDeviceHandle davis_handle;
+using namespace std;
+
+libcaer::devices::davis davisHandle = libcaer::devices::davis(1);
+struct caer_davis_info davis_info = davisHandle.infoGet();
+libcaer::filters::DVSNoise dvsNoiseFilter = libcaer::filters::DVSNoise(davis_info.dvsSizeX, davis_info.dvsSizeX);
+// cv::Mat cvEvents(davis_info.dvsSizeY, davis_info.dvsSizeX, CV_8UC3, cv::Vec3b{127, 127, 127});
+
+static void usbShutdownHandler(void *ptr) {
+	(void) (ptr); // UNUSED.
+    perror("USB Disconnected");
+    davisHandle.dataStop();
+    exit(EXIT_SUCCESS);
+}
 
 int start() {
-    davis_handle = caerDeviceOpen(1, CAER_DEVICE_DAVIS, 0, 0, NULL);
-    if(davis_handle == NULL) {
-        perror("Cannot open device");
-        return (EXIT_FAILURE);
-    }
+	printf("%s --- ID: %d, Master: %d, DVS X: %d, DVS Y: %d, Logic: %d.\n", davis_info.deviceString,
+		davis_info.deviceID, davis_info.deviceIsMaster, davis_info.dvsSizeX, davis_info.dvsSizeY,
+		davis_info.logicVersion);
+	// Send the default configuration before using the device.
+	// No configuration is sent automatically!
+	davisHandle.sendDefaultConfig();
 
-    caerDeviceSendDefaultConfig(davis_handle);
-    
-	struct caer_bias_coarsefine coarseFineBias;
+	// Enable hardware filters if present.
+	if (davis_info.dvsHasBackgroundActivityFilter) {
+		davisHandle.configSet(DAVIS_CONFIG_DVS, DAVIS_CONFIG_DVS_FILTER_BACKGROUND_ACTIVITY_TIME, 8);
+		davisHandle.configSet(DAVIS_CONFIG_DVS, DAVIS_CONFIG_DVS_FILTER_BACKGROUND_ACTIVITY, true);
 
-	coarseFineBias.coarseValue        = 2;
-	coarseFineBias.fineValue          = 116;
-	coarseFineBias.enabled            = true;
-	coarseFineBias.sexN               = false;
-	coarseFineBias.typeNormal         = true;
-	coarseFineBias.currentLevelNormal = true;
-	caerDeviceConfigSet(davis_handle, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_PRBP, caerBiasCoarseFineGenerate(coarseFineBias));
+		davisHandle.configSet(DAVIS_CONFIG_DVS, DAVIS_CONFIG_DVS_FILTER_REFRACTORY_PERIOD_TIME, 1);
+		davisHandle.configSet(DAVIS_CONFIG_DVS, DAVIS_CONFIG_DVS_FILTER_REFRACTORY_PERIOD, true);
+	}
 
-	coarseFineBias.coarseValue        = 1;
-	coarseFineBias.fineValue          = 33;
-	coarseFineBias.enabled            = true;
-	coarseFineBias.sexN               = false;
-	coarseFineBias.typeNormal         = true;
-	coarseFineBias.currentLevelNormal = true;
-	caerDeviceConfigSet(davis_handle, DAVIS_CONFIG_BIAS, DAVIS240_CONFIG_BIAS_PRSFBP, caerBiasCoarseFineGenerate(coarseFineBias));
-	
-    caerDeviceDataStart(davis_handle, NULL, NULL, NULL, NULL, NULL);
-    caerDeviceConfigSet(davis_handle, CAER_HOST_CONFIG_DATAEXCHANGE, CAER_HOST_CONFIG_DATAEXCHANGE_BLOCKING, true);
+	// Add full-sized software filter to reduce DVS noise.
+	libcaer::filters::DVSNoise dvsNoiseFilter = libcaer::filters::DVSNoise(davis_info.dvsSizeX, davis_info.dvsSizeX);
 
+	dvsNoiseFilter.configSet(CAER_FILTER_DVS_BACKGROUND_ACTIVITY_TWO_LEVELS, true);
+	dvsNoiseFilter.configSet(CAER_FILTER_DVS_BACKGROUND_ACTIVITY_CHECK_POLARITY, true);
+	dvsNoiseFilter.configSet(CAER_FILTER_DVS_BACKGROUND_ACTIVITY_SUPPORT_MIN, 2);
+	dvsNoiseFilter.configSet(CAER_FILTER_DVS_BACKGROUND_ACTIVITY_SUPPORT_MAX, 8);
+	dvsNoiseFilter.configSet(CAER_FILTER_DVS_BACKGROUND_ACTIVITY_TIME, 2000);
+	dvsNoiseFilter.configSet(CAER_FILTER_DVS_BACKGROUND_ACTIVITY_ENABLE, true);
+
+	dvsNoiseFilter.configSet(CAER_FILTER_DVS_REFRACTORY_PERIOD_TIME, 200);
+	dvsNoiseFilter.configSet(CAER_FILTER_DVS_REFRACTORY_PERIOD_ENABLE, true);
+
+	dvsNoiseFilter.configSet(CAER_FILTER_DVS_HOTPIXEL_ENABLE, true);
+	dvsNoiseFilter.configSet(CAER_FILTER_DVS_HOTPIXEL_LEARN, true);
+
+	// Now let's get start getting some data from the device. We just loop in blocking mode,
+	// no notification needed regarding new events. The shutdown notification, for example if
+	// the device is disconnected, should be listened to.
+	davisHandle.dataStart(nullptr, nullptr, nullptr, &usbShutdownHandler, nullptr);
+
+	// Let's turn on blocking data-get mode to avoid wasting resources.
+	davisHandle.configSet(CAER_HOST_CONFIG_DATAEXCHANGE, CAER_HOST_CONFIG_DATAEXCHANGE_BLOCKING, true);
+
+	// Disable APS (frames) and IMU, not used for showing event filtering.
+	davisHandle.configSet(DAVIS_CONFIG_APS, DAVIS_CONFIG_APS_RUN, false);
+	davisHandle.configSet(DAVIS_CONFIG_IMU, DAVIS_CONFIG_IMU_RUN_ACCELEROMETER, false);
+	davisHandle.configSet(DAVIS_CONFIG_IMU, DAVIS_CONFIG_IMU_RUN_GYROSCOPE, false);
+	davisHandle.configSet(DAVIS_CONFIG_IMU, DAVIS_CONFIG_IMU_RUN_TEMPERATURE, false);        
     return EXIT_SUCCESS;
 }
 
 int stop() {
-    if(davis_handle == NULL) {
-        perror("Device not yet opened");
-        return (EXIT_FAILURE);
-    }
-    caerDeviceDataStop(davis_handle);
-    caerDeviceClose(&davis_handle);
-    davis_handle = NULL;
+    davisHandle.dataStop();
     return EXIT_SUCCESS;
 }
 
-int get_info() {
-    if(davis_handle == NULL) {
-        perror("Device not yet opened");
-        return EXIT_FAILURE;
-    }
-	struct caer_davis_info davis_info = caerDavisInfoGet(davis_handle);
-
-	printf("%s --- ID: %d, Master: %d, DVS X: %d, DVS Y: %d, Logic: %d.\n", davis_info.deviceString,
-		davis_info.deviceID, davis_info.deviceIsMaster, davis_info.dvsSizeX, davis_info.dvsSizeY,
-		davis_info.logicVersion);
-    return EXIT_SUCCESS;
-}
-
-py::array_t<uint64_t> get_packet() {
+py::array_t<uint64_t> get_packet(py::array_t<uint8_t>& frame) {
     int event_cnt = 0;
     auto empty = py::array(py::buffer_info(
         NULL,
@@ -80,54 +92,57 @@ py::array_t<uint64_t> get_packet() {
         {0, 0},
         {sizeof(uint64_t)*4, sizeof(uint64_t)}
     ));
-
-    if(davis_handle == NULL) {
-        perror("Device not yet opened, open it now");
-        if(start() == EXIT_FAILURE)
-            return empty;
-    }
-
-    caerEventPacketContainer packetContainer = caerDeviceDataGet(davis_handle);
-    if (packetContainer == NULL) {
+    std::unique_ptr<libcaer::events::EventPacketContainer> packetContainer = davisHandle.dataGet();
+    
+    if (packetContainer == nullptr) {
         return empty;
     }
-    int32_t packetNum = caerEventPacketContainerGetEventPacketsNumber(packetContainer);
-    if (packetNum < 2) {
-        caerEventPacketContainerFree(packetContainer);
-        return empty;
-    }
-    // only get polarity event and ignore other events
-    caerEventPacketHeader packetHeader = caerEventPacketContainerGetEventPacket(packetContainer, POLARITY_EVENT);
-    if (packetHeader == NULL) {
-        perror("packet header is NULL");
-        return empty;
-    }
-    event_cnt = caerEventPacketHeaderGetEventNumber(packetHeader);
-    caerPolarityEventPacket polarity = (caerPolarityEventPacket) packetHeader;
 
-    auto events = py::array(py::buffer_info(
-        nullptr,
-        sizeof(uint64_t),
-        py::format_descriptor<uint64_t>::value,
-        2,
-        {event_cnt, 4},
-        {sizeof(uint64_t)*4, sizeof(uint64_t)}
-    ));
-    py::buffer_info buf_inf = events.request(true);
-    auto events_buf = (uint64_t *)buf_inf.ptr;
-    for(int i = 0; i<event_cnt; i++) {
-        caerPolarityEventConst event = caerPolarityEventPacketGetEventConst(polarity, i);
-        int32_t ts = caerPolarityEventGetTimestamp(event);
-        uint16_t x = caerPolarityEventGetX(event);
-        uint16_t y = caerPolarityEventGetY(event);
-        bool pol   = caerPolarityEventGetPolarity(event);
-        events_buf[4*i + 0] = x;
-        events_buf[4*i + 1] = y;
-        events_buf[4*i + 2] = ts;
-        events_buf[4*i + 3] = pol;
+    for (auto &packet : *packetContainer) {
+        if (packet == nullptr) {
+            continue;
+        }
+        if (packet->getEventType() != POLARITY_EVENT) {
+            continue;
+        } else {
+            std::shared_ptr<libcaer::events::PolarityEventPacket> polarity
+                = std::static_pointer_cast<libcaer::events::PolarityEventPacket>(packet);
+
+            dvsNoiseFilter.apply(*polarity);
+            event_cnt = polarity->getEventValid();
+            // printf("Got polarity packet with %d events, after filtering remaining %d events.\n",
+            //     polarity->getEventNumber(), polarity->getEventValid());
+
+            auto events = py::array(py::buffer_info(
+                nullptr,
+                sizeof(uint64_t),
+                py::format_descriptor<uint64_t>::value,
+                2,
+                {event_cnt, 4},
+                {sizeof(uint64_t)*4, sizeof(uint64_t)}
+            ));
+            py::buffer_info buf_inf = events.request(true);
+
+            auto events_buf = (uint64_t *)buf_inf.ptr;
+            cv::Mat cvEvents(frame.shape(0), frame.shape(1), CV_8UC3, (unsigned char*)frame.data());
+            int i = 0;
+            for (const auto &e : *polarity) {
+                // Discard invalid events (filtered out).
+                if (!e.isValid()) {
+                    continue;
+                }
+                events_buf[4*i + 0] = e.getX();
+                events_buf[4*i + 1] = e.getY();
+                events_buf[4*i + 2] = e.getTimestamp();
+                events_buf[4*i + 3] = e.getPolarity();
+                i++;
+                cvEvents.at<cv::Vec3b>(e.getY(), e.getX())
+                    = e.getPolarity() ? cv::Vec3b{255, 255, 255} : cv::Vec3b{0, 0, 0};
+            }
+            return events;
+        }
+        return empty;
     }
-    caerEventPacketContainerFree(packetContainer);
-    return events;
 }
 
 PYBIND11_MODULE(davis, m) {
@@ -150,12 +165,6 @@ PYBIND11_MODULE(davis, m) {
 
     m.def("close", &stop, R"pbdoc(
         Close the connection to Davis camera
-    )pbdoc");
-
-
-
-    m.def("info", &get_info, R"pbdoc(
-        Read a info from Davis camera
     )pbdoc");
 
     m.def("read", &get_packet);
