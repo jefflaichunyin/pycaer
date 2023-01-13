@@ -6,7 +6,7 @@ import cv2
 davis.open()
 
 while True:
-    frame = np.full((260,346,3), 127, 'uint8')
+    frame = np.full((260,346,3), 255, 'uint8')
     events = davis.read(frame)
     print(events)
     cv2.imshow('frame', frame)

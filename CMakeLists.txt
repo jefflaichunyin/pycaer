@@ -7,7 +7,7 @@ FIND_PACKAGE(libcaer CONFIG REQUIRED)
 FIND_PACKAGE(OpenCV REQUIRED COMPONENTS core imgproc highgui)
 
 message(STATUS "CAER found: ${libcaer_FOUND}")
-pybind11_add_module(davis MODULE src/main.cpp)
+pybind11_add_module(davis MODULE src/davis.cpp)
 target_compile_definitions(davis PRIVATE VERSION_INFO=${PROJECT_VERSION})
 target_link_libraries(davis PRIVATE caer ${OpenCV_LIBS})
 install(TARGETS davis DESTINATION pycaer)
