@@ -138,7 +138,7 @@ py::array_t<uint64_t> get_packet(py::array_t<uint8_t>& frame) {
                 events_buf[4*i + 3] = e.getPolarity();
                 i++;
                 cvEvents.at<cv::Vec3b>(e.getY(), e.getX())
-                    = e.getPolarity() ? cv::Vec3b{0, 0, 255} : cv::Vec3b{255, 0, 0};
+                    = e.getPolarity() ? cv::Vec3b{0, 0, 255} : cv::Vec3b{0, 0, 255};
             }
             return events;
         }
