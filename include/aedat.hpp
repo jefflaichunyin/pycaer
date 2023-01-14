@@ -1,4 +1,4 @@
-#define DECOMPRESSION_BUF_SIZE 100000
+#define DECOMPRESSION_BUF_SIZE 1000000
 
 #include <queue>
 #include <fstream>

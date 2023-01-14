@@ -109,9 +109,10 @@ py::array_t<uint64_t> Aedat::read(py::array_t<uint8_t>& frame){
     size_t write_len = sizeof(dst_buf);
     size_t remain = LZ4F_decompress(lz4_ctx, dst_buf, &write_len, data_cur, &read_len, nullptr);
     data_cur += pkt_size;
-    // std::cout << "read: " << read_len << " write: " << write_len << std::endl;
+    
     if (remain > 0)
     {
+        std::cout << "read: " << read_len << " write: " << write_len << std::endl;
         throw std::runtime_error("Incomplete decompression, increase buffer size");
         event_cnt = 0;
         return empty;
