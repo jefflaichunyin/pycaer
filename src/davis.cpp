@@ -129,11 +129,13 @@ py::array_t<uint64_t> get_packet(std::optional<py::array_t<uint8_t>>& frame) {
             auto events_buf = (uint64_t *)buf_inf.ptr;
             int i = 0;
             if(!frame.has_value()){
+                // printf("Frame is none\n");
                 for (const auto &e : *polarity) {
                     // Discard invalid events (filtered out).
                     if (!e.isValid()) {
                         continue;
                     }
+                    // printf("%d\n", i);
                     events_buf[4*i + 0] = e.getX();
                     events_buf[4*i + 1] = e.getY();
                     events_buf[4*i + 2] = e.getTimestamp();
@@ -185,7 +187,7 @@ PYBIND11_MODULE(davis, m) {
         Close the connection to Davis camera
     )pbdoc");
 
-    m.def("read", &get_packet);
+    m.def("read", &get_packet, py::arg("frame") = py::none());
     
 #ifdef VERSION_INFO
     m.attr("__version__") = MACRO_STRINGIFY(VERSION_INFO);

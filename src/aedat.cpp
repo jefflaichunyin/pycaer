@@ -160,5 +160,5 @@ py::array_t<uint64_t> Aedat::read(std::optional<py::array_t<uint8_t>>& frame){
 PYBIND11_MODULE(aedat, m) {
     py::class_<Aedat>(m, "Aedat")
         .def(py::init<std::string>())
-        .def("read", &Aedat::read);
+        .def("read", &Aedat::read, py::arg("frame") = py::none());
 }
