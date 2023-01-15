@@ -82,7 +82,7 @@ py::array_t<uint64_t> Aedat::read(std::optional<py::array_t<uint8_t>>& frame){
         {0, 0},
         {sizeof(uint64_t)*4, sizeof(uint64_t)}
     ));
-
+    empty.request();
     stream_id = *reinterpret_cast<int32_t *>(data_cur);
     data_cur += 4;
     pkt_size = *reinterpret_cast<int32_t *>(data_cur);
@@ -130,8 +130,6 @@ py::array_t<uint64_t> Aedat::read(std::optional<py::array_t<uint8_t>>& frame){
     ));
     py::buffer_info buf_inf = events.request(true);
     auto events_buf = (uint64_t *)buf_inf.ptr;
-
-
 
     int i = 0;
     if(!frame.has_value()) {

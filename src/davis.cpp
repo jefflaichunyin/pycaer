@@ -95,9 +95,13 @@ py::array_t<uint64_t> get_packet(std::optional<py::array_t<uint8_t>>& frame) {
         {0, 0},
         {sizeof(uint64_t)*4, sizeof(uint64_t)}
     ));
+
+    empty.request();
+
     std::unique_ptr<libcaer::events::EventPacketContainer> packetContainer = davisHandle.dataGet();
     
     if (packetContainer == nullptr) {
+        printf("packet container is null\n");
         return empty;
     }
 
@@ -161,8 +165,8 @@ py::array_t<uint64_t> get_packet(std::optional<py::array_t<uint8_t>>& frame) {
 
             return events;
         }
-        return empty;
     }
+    return empty;
 }
 
 PYBIND11_MODULE(davis, m) {
