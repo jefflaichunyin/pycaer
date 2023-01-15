@@ -68,7 +68,7 @@ Aedat::Aedat(std::string filename)
     data_end = (uint8_t*)data_table_start;
 }
 
-py::array_t<uint64_t> Aedat::read(py::array_t<uint8_t>& frame){
+py::array_t<uint64_t> Aedat::read(std::optional<py::array_t<uint8_t>>& frame){
     static uint8_t dst_buf[DECOMPRESSION_BUF_SIZE];
     int32_t stream_id;
     size_t pkt_size;
@@ -130,17 +130,29 @@ py::array_t<uint64_t> Aedat::read(py::array_t<uint8_t>& frame){
     ));
     py::buffer_info buf_inf = events.request(true);
     auto events_buf = (uint64_t *)buf_inf.ptr;
-    cv::Mat cvEvents(frame.shape(0), frame.shape(1), CV_8UC3, (unsigned char*)frame.data());
+
+
 
     int i = 0;
-    for(const auto &e : *event_pkt->elements()) {
-        events_buf[4*i + 0] = e->x();
-        events_buf[4*i + 1] = e->y();
-        events_buf[4*i + 2] = e->t();
-        events_buf[4*i + 3] = e->on();
-        i++;
-        cvEvents.at<cv::Vec3b>(e->y(), e->x())
-            = e->on() ? cv::Vec3b{0, 0, 255} : cv::Vec3b{0, 255, 0};
+    if(!frame.has_value()) {
+        for(const auto &e : *event_pkt->elements()) {
+            events_buf[4*i + 0] = e->x();
+            events_buf[4*i + 1] = e->y();
+            events_buf[4*i + 2] = e->t();
+            events_buf[4*i + 3] = e->on();
+            i++;
+        }
+    } else {
+        cv::Mat cvEvents(frame.value().shape(0), frame.value().shape(1), CV_8UC3, (unsigned char*)frame.value().data());
+        for(const auto &e : *event_pkt->elements()) {
+            events_buf[4*i + 0] = e->x();
+            events_buf[4*i + 1] = e->y();
+            events_buf[4*i + 2] = e->t();
+            events_buf[4*i + 3] = e->on();
+            i++;
+            cvEvents.at<cv::Vec3b>(e->y(), e->x())
+                = e->on() ? cv::Vec3b{0, 0, 255} : cv::Vec3b{0, 255, 0};
+        }
     }
     return events;
 }

@@ -1,6 +1,8 @@
 #include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
 #include <pybind11/numpy.h>
 #include <pybind11/functional.h>
+#include <optional>
 
 #include <libcaercpp/devices/davis.hpp>
 #include <libcaercpp/filters/dvs_noise.hpp>
@@ -83,7 +85,7 @@ int stop() {
     return EXIT_SUCCESS;
 }
 
-py::array_t<uint64_t> get_packet(py::array_t<uint8_t>& frame) {
+py::array_t<uint64_t> get_packet(std::optional<py::array_t<uint8_t>>& frame) {
     int event_cnt = 0;
     auto empty = py::array(py::buffer_info(
         NULL,
@@ -125,21 +127,36 @@ py::array_t<uint64_t> get_packet(py::array_t<uint8_t>& frame) {
             py::buffer_info buf_inf = events.request(true);
 
             auto events_buf = (uint64_t *)buf_inf.ptr;
-            cv::Mat cvEvents(frame.shape(0), frame.shape(1), CV_8UC3, (unsigned char*)frame.data());
             int i = 0;
-            for (const auto &e : *polarity) {
-                // Discard invalid events (filtered out).
-                if (!e.isValid()) {
-                    continue;
+            if(!frame.has_value()){
+                for (const auto &e : *polarity) {
+                    // Discard invalid events (filtered out).
+                    if (!e.isValid()) {
+                        continue;
+                    }
+                    events_buf[4*i + 0] = e.getX();
+                    events_buf[4*i + 1] = e.getY();
+                    events_buf[4*i + 2] = e.getTimestamp();
+                    events_buf[4*i + 3] = e.getPolarity();
+                    i++;
                 }
-                events_buf[4*i + 0] = e.getX();
-                events_buf[4*i + 1] = e.getY();
-                events_buf[4*i + 2] = e.getTimestamp();
-                events_buf[4*i + 3] = e.getPolarity();
-                i++;
-                cvEvents.at<cv::Vec3b>(e.getY(), e.getX())
-                    = e.getPolarity() ? cv::Vec3b{0, 0, 255} : cv::Vec3b{0, 0, 255};
+            }else {
+                cv::Mat cvEvents(frame.value().shape(0), frame.value().shape(1), CV_8UC3, (unsigned char*)frame.value().data());
+                for (const auto &e : *polarity) {
+                    // Discard invalid events (filtered out).
+                    if (!e.isValid()) {
+                        continue;
+                    }
+                    events_buf[4*i + 0] = e.getX();
+                    events_buf[4*i + 1] = e.getY();
+                    events_buf[4*i + 2] = e.getTimestamp();
+                    events_buf[4*i + 3] = e.getPolarity();
+                    i++;
+                    cvEvents.at<cv::Vec3b>(e.getY(), e.getX())
+                        = e.getPolarity() ? cv::Vec3b{0, 0, 255} : cv::Vec3b{0, 0, 255};
+                }
             }
+
             return events;
         }
         return empty;

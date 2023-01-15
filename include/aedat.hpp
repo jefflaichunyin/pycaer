@@ -12,7 +12,8 @@
 
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
-
+#include <pybind11/stl.h>
+#include <optional>
 #include <opencv2/core.hpp>
 
 namespace py = pybind11;
@@ -21,7 +22,7 @@ class Aedat{
     public:
         Aedat(std::string filename);
         // const EventPacket * read_packet(int &event_cnt);
-        py::array_t<uint64_t> read(py::array_t<uint8_t>& frame);
+        py::array_t<uint64_t> read(std::optional<py::array_t<uint8_t>>& frame);
     private:
         LZ4F_decompressionContext_t lz4_ctx;
         uint8_t *data_cur;
