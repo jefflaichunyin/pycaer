@@ -28,4 +28,6 @@ class Aedat{
         uint8_t *data_cur;
         uint8_t *data_start;
         uint8_t *data_end;
+        bool timestamp_valid;
+        uint64_t timestamp_offset;
 };

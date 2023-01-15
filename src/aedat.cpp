@@ -10,6 +10,7 @@
 
 Aedat::Aedat(std::string filename)
 {
+    timestamp_valid = false;
     std::ifstream infile;
     infile.open(filename, std::ios::binary | std::ios::in);
 
@@ -132,11 +133,15 @@ py::array_t<uint64_t> Aedat::read(std::optional<py::array_t<uint8_t>>& frame){
     auto events_buf = (uint64_t *)buf_inf.ptr;
 
     int i = 0;
+    if(!timestamp_valid) {
+        timestamp_offset = event_pkt->elements()->Get(0)->t();
+        timestamp_valid = true;
+    }
     if(!frame.has_value()) {
         for(const auto &e : *event_pkt->elements()) {
             events_buf[4*i + 0] = e->x();
             events_buf[4*i + 1] = e->y();
-            events_buf[4*i + 2] = e->t();
+            events_buf[4*i + 2] = e->t() - timestamp_offset;
             events_buf[4*i + 3] = e->on();
             i++;
         }
@@ -145,7 +150,7 @@ py::array_t<uint64_t> Aedat::read(std::optional<py::array_t<uint8_t>>& frame){
         for(const auto &e : *event_pkt->elements()) {
             events_buf[4*i + 0] = e->x();
             events_buf[4*i + 1] = e->y();
-            events_buf[4*i + 2] = e->t();
+            events_buf[4*i + 2] = e->t() - timestamp_offset;
             events_buf[4*i + 3] = e->on();
             i++;
             cvEvents.at<cv::Vec3b>(e->y(), e->x())
