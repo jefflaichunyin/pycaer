@@ -10,7 +10,7 @@ cv2.namedWindow('frame', cv2.WINDOW_NORMAL)
 while True:
     frame = np.full((260,346,3), 0, 'uint8')
     events = aedat.read(frame)
-    print(events)
+    print(len(events), events[0][2], events[-1][2])
     if events.shape[0] == 0:
         print("End of file")
         break

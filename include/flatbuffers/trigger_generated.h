@@ -12,7 +12,7 @@ struct TriggerBuilder;
 struct TriggerPacket;
 struct TriggerPacketBuilder;
 
-enum TriggerSource : int8_t {
+enum TriggerSource {
   TriggerSource_TimestampReset = 0,
   TriggerSource_ExternalSignalRisingEdge = 1,
   TriggerSource_ExternalSignalFallingEdge = 2,
@@ -80,8 +80,8 @@ struct Trigger FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   }
   bool Verify(flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
-           VerifyField<int64_t>(verifier, VT_T, 8) &&
-           VerifyField<int8_t>(verifier, VT_SOURCE, 1) &&
+           VerifyField<int64_t>(verifier, VT_T) &&
+           VerifyField<int8_t>(verifier, VT_SOURCE) &&
            verifier.EndTable();
   }
 };

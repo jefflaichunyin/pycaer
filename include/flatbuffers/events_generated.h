@@ -37,8 +37,6 @@ FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(8) Event FLATBUFFERS_FINAL_CLASS {
         on_(flatbuffers::EndianScalar(static_cast<uint8_t>(_on))),
         padding0__(0),
         padding1__(0) {
-    (void)padding0__;
-    (void)padding1__;
   }
   int64_t t() const {
     return flatbuffers::EndianScalar(t_);

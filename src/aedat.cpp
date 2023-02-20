@@ -99,7 +99,7 @@ py::array_t<uint64_t> Aedat::read(std::optional<py::array_t<uint8_t>>& frame){
     
     // std::cout << "stream id: " << stream_id << " size: " << pkt_size << std::endl;
 
-    if(stream_id != 0 || pkt_size == 0)
+    if(stream_id != 0 || pkt_size == 0 || data_cur >= data_end)
     {
         event_cnt = 0;
         return empty;
@@ -113,7 +113,7 @@ py::array_t<uint64_t> Aedat::read(std::optional<py::array_t<uint8_t>>& frame){
     
     if (remain > 0)
     {
-        std::cout << "read: " << read_len << " write: " << write_len << std::endl;
+        std::cout << "pkt size: " << pkt_size << "read: " << read_len << " write: " << write_len << std::endl;
         throw std::runtime_error("Incomplete decompression, increase buffer size");
         event_cnt = 0;
         return empty;

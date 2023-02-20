@@ -63,11 +63,11 @@ struct FileDataDefinition FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   }
   bool Verify(flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
-           VerifyField<int64_t>(verifier, VT_BYTE_OFFSET, 8) &&
-           VerifyField<PacketHeader>(verifier, VT_PACKET_INFO, 4) &&
-           VerifyField<int64_t>(verifier, VT_NUM_ELEMENTS, 8) &&
-           VerifyField<int64_t>(verifier, VT_TIMESTAMP_START, 8) &&
-           VerifyField<int64_t>(verifier, VT_TIMESTAMP_END, 8) &&
+           VerifyField<int64_t>(verifier, VT_BYTE_OFFSET) &&
+           VerifyField<PacketHeader>(verifier, VT_PACKET_INFO) &&
+           VerifyField<int64_t>(verifier, VT_NUM_ELEMENTS) &&
+           VerifyField<int64_t>(verifier, VT_TIMESTAMP_START) &&
+           VerifyField<int64_t>(verifier, VT_TIMESTAMP_END) &&
            verifier.EndTable();
   }
 };
@@ -105,7 +105,7 @@ struct FileDataDefinitionBuilder {
 inline flatbuffers::Offset<FileDataDefinition> CreateFileDataDefinition(
     flatbuffers::FlatBufferBuilder &_fbb,
     int64_t byte_offset = 0,
-    const PacketHeader *packet_info = nullptr,
+    const PacketHeader *packet_info = 0,
     int64_t num_elements = 0,
     int64_t timestamp_start = 0,
     int64_t timestamp_end = 0) {

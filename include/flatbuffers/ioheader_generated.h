@@ -9,7 +9,7 @@
 struct IOHeader;
 struct IOHeaderBuilder;
 
-enum CompressionType : int32_t {
+enum CompressionType {
   CompressionType_NONE = 0,
   CompressionType_LZ4 = 1,
   CompressionType_LZ4_HIGH = 2,
@@ -66,8 +66,8 @@ struct IOHeader FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   }
   bool Verify(flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
-           VerifyField<int32_t>(verifier, VT_COMPRESSION, 4) &&
-           VerifyField<int64_t>(verifier, VT_DATA_TABLE_POSITION, 8) &&
+           VerifyField<int32_t>(verifier, VT_COMPRESSION) &&
+           VerifyField<int64_t>(verifier, VT_DATA_TABLE_POSITION) &&
            VerifyOffset(verifier, VT_INFO_NODE) &&
            verifier.VerifyString(info_node()) &&
            verifier.EndTable();
