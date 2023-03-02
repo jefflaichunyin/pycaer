@@ -1,12 +1,18 @@
 #! /usr/bin/python3
 import cv2 as cv
 import numpy as np
-from pycaer.aedat import Aedat
+import dv_processing as dv
 import sys
+
+def getEvents(recording, frame):
+    events = recording.getNextEventBatch()
+    for event in events:
+        frame[event.y(), event.x()] = (0,0,255) if event.polarity() else (0,255,0)
+    return events
 
 pkt_cnt = 0
 frame_delay = 10
-f = Aedat(sys.argv[1])
+reader = dv.io.MonoCameraRecording(sys.argv[1])
 cv.namedWindow('frame', cv.WINDOW_NORMAL)
 cv.resizeWindow('frame', 346*3, 260*3)
 frame = np.full((260,346,3), 255, 'uint8')
@@ -22,7 +28,8 @@ track = np.full((260,346,3), 0, 'uint8')
 while True:
     # events are formated in the following way: [x, y, self.t, p]
     frame = np.full((260,346,3), 0, 'uint8')
-    events = f.read(frame)
+    events = getEvents(reader, frame)
+    
     pkt_cnt += 1
     dst = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
     dst = cv.GaussianBlur(dst,(9,9),0)
@@ -41,6 +48,7 @@ while True:
     annotated = cv.add(annotated, track)
 
     cv.imshow('frame', annotated)
+    # cv.imshow('frame', events)
     key = cv.waitKey(frame_delay) & 0xFF
     if key == ord('q'):
         print("pkt cnt = ", pkt_cnt)
@@ -53,7 +61,7 @@ while True:
         print("frame delay = ", frame_delay)
     elif key == ord('d'):
         for _ in range(10):
-            events = f.read(frame)
+            events = getEvents(reader)
             pkt_cnt += 1
         print(pkt_cnt)
     if len(events) == 0:
