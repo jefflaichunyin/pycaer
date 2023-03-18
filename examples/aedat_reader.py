@@ -5,12 +5,26 @@ import dv_processing as dv
 from matplotlib import pyplot as plt
 import sys
 
-track_by = "event"
+track_by = "image"
 read_cnt = 0
 last_frame = None
 roi = [None, None]
 roi_select_state = 0
 roi_hist = None
+
+backSub = cv.createBackgroundSubtractorKNN(20, 100, False)
+
+def increase_brightness(img, value=30):
+    hsv = cv.cvtColor(img, cv.COLOR_BGR2HSV)
+    h, s, v = cv.split(hsv)
+
+    lim = 255 - value
+    v[v > lim] = 255
+    v[v <= lim] += value
+
+    final_hsv = cv.merge((h, s, v))
+    img = cv.cvtColor(final_hsv, cv.COLOR_HSV2BGR)
+    return img
 
 def getEvents(recording, frame = None):
     global read_cnt
@@ -103,15 +117,15 @@ while reader.isRunning():
         
         read_cnt += 1
         dst = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
-        dst = cv.GaussianBlur(dst,(9,9),0)
-        ret, dst = cv.threshold(dst,32,255,cv.THRESH_TOZERO)
+        dst = cv.GaussianBlur(dst,(5,5),0)
+        ret, dst = cv.threshold(dst,24,255,cv.THRESH_TOZERO)
         ret, track_window = cv.CamShift(dst, track_window, term_crit)
         pts = cv.boxPoints(ret)
         pts = np.int0(pts)
         center = np.int0(ret[0])
         # print("center", center)
         annotated = cv.polylines(frame,[pts],True, (0,255,255), 2)
-        cv.putText(annotated, f"x: {center[0]} y:{center[1]} r:{ret[2]:3.2f}", (0, 16), cv.FONT_HERSHEY_SIMPLEX, 0.5, (0,200,0), 1, cv.LINE_AA)
+        cv.putText(annotated, f"x: {center[0]} y:{center[1]} r:{(ret[2]-90):3.2f}", (0, 16), cv.FONT_HERSHEY_SIMPLEX, 0.5, (0,200,0), 1, cv.LINE_AA)
 
         if not np.all(previous_center == 0) and not np.all(center == 0):
             cv.line(track, previous_center, center, (0,128,0), 1)
@@ -122,48 +136,64 @@ while reader.isRunning():
         annotated = cv.add(annotated, center_path)
     elif track_by == "image":
         frame = getImage(reader)
-        last_frame = frame.copy()
-        if roi_select_state != 2:
-            print("read cnt = ", read_cnt)
-            frame_delay = 0
-            annotated = frame
+        if last_frame is None:
+            for _ in range(4):
+                frame = getImage(reader)
+                backSub.apply(frame)
+            last_frame = frame.copy()
         else:
-            hsv = cv.cvtColor(frame, cv.COLOR_BGR2HSV)
-            dst = cv.calcBackProject([hsv],[0],roi_hist,[0,180],1)
-            dst = cv.GaussianBlur(dst,(9,9),0)
-            ret, dst = cv.threshold(dst,56,255,cv.THRESH_TOZERO)
-            cv.normalize(dst,dst,0,255,cv.NORM_MINMAX)
-            # annotated = dst
-            # draw search window
-            x,y,w,h = track_window
-            w = int(w/2)
-            h = int(h/2)
-            print("search window", x,y,w,h)
-            track_window = (173, 130, 300, 190)
-            # ret, track_window = cv.CamShift(dst, track_window, term_crit)
-            ret, track_window = cv.meanShift(dst, track_window, term_crit)
-            print("result", ret, track_window)
-            pts = cv.boxPoints(ret)
-            pts = np.int0(pts)
-            center = np.int0(ret[0])
-            print("center", center)
-            prob_dist = cv.merge([dst, dst, dst])
-            annotated = cv.polylines(prob_dist,[pts],True, 255,2)
-            annotated = cv.rectangle(annotated, (x-w, y-h), (x+w, y+h), (0,0,255), 2)
+            fgmask = backSub.apply(frame)
+            bgmask = cv.bitwise_not(fgmask)
+            frame = increase_brightness(frame, 40)
+            fg = cv.bitwise_and(frame, frame, mask = fgmask)
+            bg = cv.bitwise_and(last_frame, last_frame, mask=bgmask)
+            blended = cv.add(fg, bg)
+            last_frame = blended.copy()
+            annotated = blended
+        # if roi_select_state != 2:
+        #     print("read cnt = ", read_cnt)
+        #     frame_delay = 0
+        #     annotated = frame
+        # else:
+        #     fgmask = backSub.apply(frame)
+        #     annotated = fgmask
 
-            cv.putText(annotated, f"{center[0]}, {center[1]}, {ret[2]:3.2f}", pts[0], cv.FONT_HERSHEY_SIMPLEX, 0.5, (0,200,0), 2, cv.LINE_AA)
+            # hsv = cv.cvtColor(frame, cv.COLOR_BGR2HSV)
+            # dst = cv.calcBackProject([hsv],[0],roi_hist,[0,180],1)
+            # dst = cv.GaussianBlur(dst,(9,9),0)
+            # ret, dst = cv.threshold(dst,56,255,cv.THRESH_TOZERO)
+            # cv.normalize(dst,dst,0,255,cv.NORM_MINMAX)
+            # # annotated = dst
+            # # draw search window
+            # x,y,w,h = track_window
+            # w = int(w/2)
+            # h = int(h/2)
+            # print("search window", x,y,w,h)
+            # track_window = (173, 130, 300, 190)
+            # # ret, track_window = cv.CamShift(dst, track_window, term_crit)
+            # ret, track_window = cv.meanShift(dst, track_window, term_crit)
+            # print("result", ret, track_window)
+            # pts = cv.boxPoints(ret)
+            # pts = np.int0(pts)
+            # center = np.int0(ret[0])
+            # print("center", center)
+            # prob_dist = cv.merge([dst, dst, dst])
+            # annotated = cv.polylines(prob_dist,[pts],True, 255,2)
+            # annotated = cv.rectangle(annotated, (x-w, y-h), (x+w, y+h), (0,0,255), 2)
 
-            if not np.all(previous_center == 0) and not np.all(center == 0):
-                cv.line(track, previous_center, center, (0,255,0), 2)
-                cv.circle(center_path, center, 2, (128, 128, 255), 1)
-            previous_center = center
-            annotated = cv.add(annotated, track)
-            annotated = cv.add(annotated, center_path)
-            # reset track window
-            w = min(150, (346-center[0])*2)
-            h = min(150, (240-center[1])*2)
-            # track_window = (center[0], center[1], w, h)
-            track_window = (173, 130, 300, 190)
+            # cv.putText(annotated, f"{center[0]}, {center[1]}, {ret[2]:3.2f}", pts[0], cv.FONT_HERSHEY_SIMPLEX, 0.5, (0,200,0), 2, cv.LINE_AA)
+
+            # if not np.all(previous_center == 0) and not np.all(center == 0):
+            #     cv.line(track, previous_center, center, (0,255,0), 2)
+            #     cv.circle(center_path, center, 2, (128, 128, 255), 1)
+            # previous_center = center
+            # annotated = cv.add(annotated, track)
+            # annotated = cv.add(annotated, center_path)
+            # # reset track window
+            # w = min(150, (346-center[0])*2)
+            # h = min(150, (240-center[1])*2)
+            # # track_window = (center[0], center[1], w, h)
+            # track_window = (173, 130, 300, 190)
 
     cv.putText(annotated, f"pkt#: {read_cnt}", (0, 32), cv.FONT_HERSHEY_SIMPLEX, 0.5, (0,200,0), 1, cv.LINE_AA)
         
